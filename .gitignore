@@ -105,3 +105,6 @@ ENV/
 
 # exclude the data folder
 data/
+
+# exclude the knittr generated html
+computing-r/*.html

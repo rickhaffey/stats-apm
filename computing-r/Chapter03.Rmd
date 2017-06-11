@@ -1,0 +1,191 @@
+# Computing - Chapter 03
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Library Installation
+
+```{r}
+#install.packages("AppliedPredictiveModeling")
+#install.packages("e1071")
+#install.packages("caret")
+#install.packages("corrplot")
+```
+
+## Load Library
+
+```{r}
+library(AppliedPredictiveModeling)
+library(e1071)
+library(caret)
+library(corrplot)
+```
+
+
+## Load Data
+
+```{r}
+data(segmentationOriginal)
+
+# look at just training data
+segData <- subset(segmentationOriginal, Case == "Train")
+
+# extract some vectors from the main dataset
+cellID <- segData$Cell
+class <- segData$Class
+case <- segData$Case
+
+# remove those variables 
+segData <- segData[, -(1:3)]
+
+# remove the "status" columns
+statusColNum <- grep("Status", names(segData))
+segData <- segData[, -statusColNum]
+```
+
+## Transformations
+
+Determine the skewness level of the variables
+
+```{r}
+skewValues <- apply(segData, 2, skewness)
+head(skewValues)
+```
+
+Visualize those needing review
+
+```{r, echo=FALSE}
+hist(segData$AreaCh1)
+# OR
+# library(lattice)
+# histogram(segData$AreaCh1)
+```
+
+Define a box-cox transformation 
+
+```{r}
+Ch1AreaTrans <- BoxCoxTrans(segData$AreaCh1)
+Ch1AreaTrans
+```
+
+Compare the original to the transformed
+
+```{r}
+# original
+head(segData$AreaCh1)
+
+# transformed
+predict(Ch1AreaTrans, head(segData$AreaCh1))
+
+# manual confirmation
+(segData$AreaCh1[1] ^ (Ch1AreaTrans$lambda) - 1) / (Ch1AreaTrans$lambda)
+```
+
+Center and scale, then perform PCA
+
+```{r}
+pcaObject <- prcomp(segData, center=TRUE, scale.=TRUE)
+percentVariance <- pcaObject$sd ^ 2 / sum(pcaObject$sd ^ 2) * 100
+percentVariance[1:3]
+```
+
+
+Review the tranformed values (stored in value `x`)
+
+```{r}
+head(pcaObject$x[, 1:5])
+```
+
+Review the loadings
+
+```{r}
+head(pcaObject$rotation[, 1:3])
+```
+
+`caret` package supports `spatialSign` function: `spatialSign(segData)`
+
+For imputing missing values, consider the `impute` package.  e.g. `impute.knn`.  (`preProcess` in the `caret` package makes use of this.)
+
+`preProcess` can be used to generate and object to perform a series of data preparation steps.
+
+```{r}
+trans <- preProcess(segData,
+                    method = c("BoxCox", "center", "scale", "pca"))
+trans
+```
+
+The object generated can then be used to perform the transformation:
+
+```{r}
+transformed <- predict(trans, segData)
+head(transformed[, 1:5])
+```
+
+Order of operations: transformation, centering, scaling, imputation, feature extraction, spatial sign.
+
+The `train` function in `caret` can optionally use `preProcess` within resampling iterations.
+
+## Filtering
+
+`nearZeroVar` (`caret`) - returns the column numbers of any near-zero variance predictors
+
+`cor` (`stats`) - generate a correlation matrix
+
+```{r}
+correlations <- cor(segData)
+dim(correlations)
+correlations[1:4, 1:4]
+```
+
+`corrplot` (`corrplot`) - visualize a correlation matrix to highlight relationships with high positive or negative correlation
+
+```{r}
+corrplot(correlations, order="hclust")
+```
+
+`findCorrelation` (`caret`) - returns column numbers for the predictors recommended for removal due to high correlation
+
+```{r}
+highCorr <- findCorrelation(correlations, cutoff = 0.75)
+length(highCorr)
+head(highCorr)
+filteredSegData <- segData[, -highCorr]
+```
+
+The `subselect` package contains several functions that can be used to perform the same filtering.
+
+## Creating Dummy Variables
+
+* Recommend using the full set of dummy variables when working with tree based models
+
+Example that attempts to predict iris sepal length based on species
+
+```{r}
+data(iris)
+levels(iris$Species)
+
+simpleMod <- dummyVars(~Sepal.Length + Species, data=iris, levelsOnly=TRUE)
+simpleMod
+```
+
+Generate the dummy variables for the training set
+
+```{r}
+predict(simpleMod, head(iris))
+```
+
+Or, if we believe there's a _joint effect_ between predictors, we can include an interaction:
+
+```{r}
+withInteraction <- dummyVars(~Sepal.Length + Species + Sepal.Width:Species,
+                             data = iris,
+                             levelsOnly=TRUE)
+withInteraction
+```
+
+Generate the dummy variables (with interactions) for the training set:
+
+```{r}
+predict(withInteraction, head(iris))
+```
