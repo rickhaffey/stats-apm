@@ -1,0 +1,53 @@
+# Chapter03
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 3.1
+
+```{r}
+library(mlbench)
+data(Glass)
+str(Glass)
+```
+
+### (a) - Use visulatizations to explore predictors [distributions and relationships]
+
+```{r}
+library(plyr)
+library(psych)
+multi.hist(Glass[,sapply(Glass, is.numeric)])
+
+library(corrplot)
+correlations <- cor(Glass[,1:9])
+correlations
+
+corrplot(correlations, order="hclust")
+```
+
+### (b) - Any outliers?  Any skewed predictors?
+
+```{r}
+library(reshape2)
+long <- melt(Glass[,c(1,3,4,6,8,9)])
+plot(value~variable, data=long)
+
+boxplot(Glass$Na)
+boxplot(Glass$Ca)
+boxplot(Glass$Si)
+
+library(e1071)
+skewValues <- apply(Glass[, 1:9], 2, skewness)
+skewValues
+```
+
+### (c) - Relevant transformations that might improve predictive model?
+
+```{r}
+library(caret)
+scaler <- preProcess(Glass[,1:9])
+scaled <- predict(scaler, Glass[,1:9])
+transformed <- spatialSign(scaled)
+multi.hist(transformed)
+```
