@@ -108,3 +108,6 @@ data/
 
 # exclude the knittr generated html
 computing-r/*.html
+
+# exclude the data folder
+./data
